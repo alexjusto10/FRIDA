@@ -1,0 +1,60 @@
+{
+    "nombreApp" : "FRIDA",
+    "rutas" : [
+        {
+            "ruta" : "login",
+            "icon" : "add_alert",
+            "texto": "Login ciudadano"
+        },
+        {
+            "ruta" : "registro",
+            "icon" : "add_box",
+            "texto": "Registro ciudadano"
+        },
+        {
+            "ruta" : "home_ciudadano",
+            "icon" : "home",
+            "texto": "Home Ciudadano"
+        },
+        {
+            "ruta" : "perfil",
+            "icon" : "person",
+            "texto": "Perfil Ciudadano"
+        },
+        {
+            "ruta" : "mensaje",
+            "icon" : "message",
+            "texto": "Modificar Mensaje"
+        },
+        {
+            "ruta" : "notificar",
+            "icon" : "sms_failed",
+            "texto": "Notificar Daño"
+        },
+        {
+            "ruta" : "cuestionario",
+            "icon" : "assignment",
+            "texto": "Cuestionario"
+        },
+        {
+            "ruta" : "centro_acopio_ciudadano",
+            "icon" : "location_on",
+            "texto": "Centro de acopio (Ciudadano)"
+        },
+        {
+            "ruta" : "login_brigadista",
+            "icon" : "person_outline",
+            "texto": "Login Brigadista"
+        },
+        {
+            "ruta" : "home_brigadista",
+            "icon" : "assignment_late",
+            "texto": "Home Brigadista"
+        },
+        {
+            "ruta" : "centro_acopio_brigadista",
+            "icon" : "add_location",
+            "texto": "Centro de acopio (Brigadista)"
+        }
+    ]
+}
