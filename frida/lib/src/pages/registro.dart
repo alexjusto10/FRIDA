@@ -1,4 +1,10 @@
+import 'dart:developer';
+
+import 'package:FRIDA/ciudadano_model.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert' as convert;
+import 'package:fluttertoast/fluttertoast.dart';
 
 class Registro extends StatefulWidget {
   @override
@@ -6,10 +12,18 @@ class Registro extends StatefulWidget {
 }
 
 class _RegistroState extends State<Registro> {
-  String _nombre = '';
-  String _email = '';
-  String _password = '';
-  String _fecha = '';
+  String _nombre = '',
+      _apellido_paterno = '',
+      _apellido_materno = '',
+      _calle_numero = '',
+      _colonia = '',
+      _cp = '',
+      _alcaldia_municipio = '',
+      _estado = '',
+      _email = '',
+      _password = '',
+      _passwordConfirmacion = '',
+      _fecha = '';
 
   TextEditingController _inputFieldDateController = new TextEditingController();
 
@@ -77,6 +91,7 @@ class _RegistroState extends State<Registro> {
                 _crearCodigoPostal(),
                 _crearCampoTexto('Alcaldía o municipio',
                     'Introduce tu alcaldía o municipio'),
+                _crearCampoTexto('Estado', 'Introduce tu estado'),
               ],
             ),
           ),
@@ -126,7 +141,8 @@ class _RegistroState extends State<Registro> {
                   textColor: Colors.black,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0)),
-                  onPressed: () {
+                  onPressed: () async {
+                    final CiudadanoModel ciudadano = await crearCiudadano();
                     Navigator.of(context).pop();
                   },
                 ),
@@ -154,7 +170,29 @@ class _RegistroState extends State<Registro> {
               labelText: _nombreCampo),
           onChanged: (valor) {
             setState(() {
-              _nombre = valor;
+              switch (_nombreCampo) {
+                case "Nombre":
+                  _nombre = valor;
+                  break;
+                case "Apellido Paterno":
+                  _apellido_paterno = valor;
+                  break;
+                case "Apellido Materno":
+                  _apellido_materno = valor;
+                  break;
+                case "Calle y número":
+                  _calle_numero = valor;
+                  break;
+                case "Colonia":
+                  _colonia = valor;
+                  break;
+                case "Alcaldía o municipio":
+                  _alcaldia_municipio = valor;
+                  break;
+                case "Estado":
+                  _estado = valor;
+                  break;
+              }
             });
           },
         ));
@@ -176,6 +214,11 @@ class _RegistroState extends State<Registro> {
           FocusScope.of(context).requestFocus(new FocusNode());
           _selectDate(context);
         },
+        onChanged: (valor) {
+          setState(() {
+            _fecha = valor;
+          });
+        },
       ),
     );
   }
@@ -184,33 +227,39 @@ class _RegistroState extends State<Registro> {
     return Container(
       padding: EdgeInsets.all(10.0),
       child: TextField(
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
             border:
                 OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
             hintText: 'Introduce el código postal',
-            labelText: 'Código Postal',
-          )),
+            labelText: 'Código Postal'),
+        onChanged: (valor) {
+          setState(() {
+            _cp = valor;
+          });
+        },
+      ),
     );
   }
 
   Widget _crearEmail() {
     return Container(
-        padding: EdgeInsets.all(10.0),
-        child: TextField(
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
-              hintText: 'Introduce tu correo electrónico',
-              labelText: 'Correo electrónico',
-              suffixIcon: Icon(Icons.alternate_email)),
-          onChanged: (valor) {
-            setState(() {
-              _email = valor;
-            });
-          },
-        ));
+      padding: EdgeInsets.all(10.0),
+      child: TextField(
+        keyboardType: TextInputType.emailAddress,
+        decoration: InputDecoration(
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
+            hintText: 'Introduce tu correo electrónico',
+            labelText: 'Correo electrónico',
+            suffixIcon: Icon(Icons.alternate_email)),
+        onChanged: (valor) {
+          setState(() {
+            _email = valor;
+          });
+        },
+      ),
+    );
   }
 
   Widget _crearPassword(String _nombreCampo, String _pista, String _ayuda) {
@@ -228,7 +277,10 @@ class _RegistroState extends State<Registro> {
               suffixIcon: Icon(Icons.lock)),
           onChanged: (valor) {
             setState(() {
-              _password = valor;
+              if (_nombreCampo == 'Contraseña')
+                _password = valor;
+              else
+                _passwordConfirmacion = valor;
             });
           },
         ));
@@ -238,18 +290,79 @@ class _RegistroState extends State<Registro> {
     DateTime picked = await showDatePicker(
         context: context,
         initialDate: new DateTime.now(),
-        firstDate: new DateTime(1930),
+        firstDate: new DateTime(1910),
         lastDate: new DateTime.now(),
         locale: Locale('es', 'ES'));
     if (picked != null) {
       setState(() {
-        _fecha = picked.day.toString() +
-            '/' +
-            picked.month.toString() +
-            '/' +
-            picked.year.toString();
+        _fecha = picked.year.toString();
+        if (picked.month.toString().length == 1)
+          _fecha = _fecha + "-0" + picked.month.toString();
+        else
+          _fecha = _fecha + "-" + picked.month.toString();
+
+        if (picked.day.toString().length == 1)
+          _fecha = _fecha + "-0" + picked.day.toString();
+        else
+          _fecha = _fecha + "-" + picked.day.toString();
         _inputFieldDateController.text = _fecha;
       });
+    }
+  }
+
+  Future<CiudadanoModel> crearCiudadano() async {
+    log(_nombre +
+        "/" +
+        _apellido_paterno +
+        "/" +
+        _apellido_materno +
+        "/" +
+        _fecha +
+        "/" +
+        _calle_numero +
+        "/" +
+        _colonia +
+        "/" +
+        _cp +
+        "/" +
+        _alcaldia_municipio +
+        "/" +
+        _estado +
+        "/" +
+        _email +
+        "/" +
+        _password);
+    final String url =
+        "http://192.168.0.26:8080/appCiudadano/registrar/ciudadano";
+    final response = await http.post(url,
+        headers: {
+          "Accept": "application/json",
+          "content-type": "application/json"
+        },
+        body: convert.jsonEncode({
+          "nombre": _nombre,
+          "apellido_paterno": _apellido_paterno,
+          "apellido_materno": _apellido_materno,
+          "fecha_nacimiento": _fecha,
+          "calle_numero": _calle_numero,
+          "colonia": _colonia,
+          "cp": _cp,
+          "alcaldia_municipio": _alcaldia_municipio,
+          "estado": _estado,
+          "email": _email,
+          "psswrd": _password,
+          "id_recomendacion": "1"
+        }));
+    if (response.statusCode == 200) {
+      final String responseString = response.body;
+      Fluttertoast.showToast(
+          msg: 'El registro se realizó correctamente',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM);
+      return ciudadanoModelFromJson(responseString);
+    } else {
+      log(response.statusCode.toString() + " / " + response.body);
+      return null;
     }
   }
 }

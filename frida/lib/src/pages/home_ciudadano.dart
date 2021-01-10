@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:android_intent/android_intent.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:tweet_webview/tweet_webview.dart';
 import 'dart:io' show Platform;
 
 class HomeCiudadano extends StatefulWidget {
@@ -41,37 +42,27 @@ class _HomeCiudadanoState extends State<HomeCiudadano> {
       body: ListView(
         children: <Widget>[
           Container(
-            padding: EdgeInsets.only(
-                right: 15.0, left: 15.0, top: 20.0, bottom: 5.0),
-            child: Container(
-              decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10.0),
-                  border: Border.all(color: Colors.grey[400]),
-                  shape: BoxShape.rectangle,
-                  color: Colors.white),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Container(
-                    padding: EdgeInsets.only(left: 10.0, top: 10.0),
-                    child: Text(
-                      'ACONTECIMIENTOS RECIENTES',
-                      style:
-                          TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
+              padding: EdgeInsets.only(
+                  right: 15.0, left: 15.0, top: 20.0, bottom: 5.0),
+              child: Container(
+                  height: 600,
+                  decoration: BoxDecoration(
+                    border: Border.all(),
+                    borderRadius: BorderRadius.all(Radius.circular(10.0)),
                   ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10.0),
-                    child: FadeInImage(
-                      image: AssetImage('assets/Twitter.PNG'),
-                      placeholder: AssetImage('assets/original.gif'),
-                      fadeInDuration: Duration(milliseconds: 200),
+                  child: Container(
+                    height: 250,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(10.0)),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0),
+                      ),
+                      child: TweetWebView.tweetUrl(
+                          "https://twitter.com/SismologicoMX"),
+                    ),
+                  ))),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 15.0, vertical: 5.0),
             child: Row(
