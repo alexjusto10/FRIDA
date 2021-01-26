@@ -1,10 +1,9 @@
 import 'dart:developer';
-
-import 'package:FRIDA/ciudadano_model.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Registro extends StatefulWidget {
   @override
@@ -23,7 +22,13 @@ class _RegistroState extends State<Registro> {
       _email = '',
       _password = '',
       _passwordConfirmacion = '',
-      _fecha = '';
+      _fecha = '',
+      _contacto1,
+      _contacto2,
+      _contacto3;
+  final String _recordarTelefono1 = "recordarTelefono1",
+      _recordarTelefono2 = "recordarTelefono2",
+      _recordarTelefono3 = "recordarTelefono3";
 
   TextEditingController _inputFieldDateController = new TextEditingController();
 
@@ -106,6 +111,35 @@ class _RegistroState extends State<Registro> {
               children: <Widget>[
                 const ListTile(
                   leading: Icon(
+                    Icons.person_add,
+                    color: Color(0xffd8a500),
+                  ),
+                  title: Text(
+                    'Contactos de confianza',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 17.0),
+                  ),
+                ),
+                _crearCampoTexto('Contacto No.1',
+                    'Introduce el teléfono del contacto de confianza'),
+                _crearCampoTexto('Contacto No.2',
+                    'Introduce el teléfono del contacto de confianza'),
+                _crearCampoTexto('Contacto No.3',
+                    'Introduce el teléfono del contacto de confianza'),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 30.0,
+          ),
+          Card(
+            elevation: 2.0,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            child: Column(
+              children: <Widget>[
+                const ListTile(
+                  leading: Icon(
                     Icons.email,
                     color: Color(0xffd8a500),
                   ),
@@ -142,7 +176,7 @@ class _RegistroState extends State<Registro> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0)),
                   onPressed: () async {
-                    final CiudadanoModel ciudadano = await crearCiudadano();
+                    await crearCiudadano();
                     Navigator.of(context).pop();
                   },
                 ),
@@ -191,6 +225,15 @@ class _RegistroState extends State<Registro> {
                   break;
                 case "Estado":
                   _estado = valor;
+                  break;
+                case "Contacto No.1":
+                  _contacto1 = valor;
+                  break;
+                case "Contacto No.2":
+                  _contacto2 = valor;
+                  break;
+                case "Contacto No.3":
+                  _contacto3 = valor;
                   break;
               }
             });
@@ -270,7 +313,6 @@ class _RegistroState extends State<Registro> {
           decoration: InputDecoration(
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
-              //counter: Text('Letras ${_password.length}'),
               hintText: _pista,
               labelText: _nombreCampo,
               helperText: _ayuda,
@@ -310,59 +352,44 @@ class _RegistroState extends State<Registro> {
     }
   }
 
-  Future<CiudadanoModel> crearCiudadano() async {
-    log(_nombre +
-        "/" +
-        _apellido_paterno +
-        "/" +
-        _apellido_materno +
-        "/" +
-        _fecha +
-        "/" +
-        _calle_numero +
-        "/" +
-        _colonia +
-        "/" +
-        _cp +
-        "/" +
-        _alcaldia_municipio +
-        "/" +
-        _estado +
-        "/" +
-        _email +
-        "/" +
-        _password);
-    final String url =
-        "http://192.168.0.26:8080/appCiudadano/registrar/ciudadano";
+  Future crearCiudadano() async {
+    final String url = "http://13.84.215.39:8080/nuevo/ciudadano";
     final response = await http.post(url,
         headers: {
           "Accept": "application/json",
           "content-type": "application/json"
         },
-        body: convert.jsonEncode({
-          "nombre": _nombre,
-          "apellido_paterno": _apellido_paterno,
-          "apellido_materno": _apellido_materno,
-          "fecha_nacimiento": _fecha,
-          "calle_numero": _calle_numero,
-          "colonia": _colonia,
-          "cp": _cp,
-          "alcaldia_municipio": _alcaldia_municipio,
-          "estado": _estado,
-          "email": _email,
-          "psswrd": _password,
-          "id_recomendacion": "1"
-        }));
-    if (response.statusCode == 200) {
-      final String responseString = response.body;
+        body: convert.jsonEncode(
+          {
+            "nombre": _nombre,
+            "apellido_paterno": _apellido_paterno,
+            "apellido_materno": _apellido_materno,
+            "nombreUsuario": _email,
+            "email": _email,
+            "password": _password,
+            "roles": ["ciudadano"],
+            "fecha_nacimiento": _fecha,
+            "calle_numero": _calle_numero,
+            "colonia": _colonia,
+            "cp": _cp,
+            "alcaldia_municipio": _alcaldia_municipio,
+            "estado": _estado,
+            "id_recomendacion": "1"
+          },
+        ));
+    if (response.statusCode == 201) {
       Fluttertoast.showToast(
           msg: 'El registro se realizó correctamente',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM);
-      return ciudadanoModelFromJson(responseString);
-    } else {
-      log(response.statusCode.toString() + " / " + response.body);
-      return null;
+      _recordarContactos();
     }
+  }
+
+  Future<void> _recordarContactos() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString(_recordarTelefono1, _contacto1);
+    prefs.setString(_recordarTelefono2, _contacto2);
+    prefs.setString(_recordarTelefono3, _contacto3);
   }
 }

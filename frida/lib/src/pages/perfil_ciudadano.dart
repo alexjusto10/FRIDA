@@ -1,24 +1,29 @@
 import 'dart:developer';
-import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
+import 'package:shared_preferences/shared_preferences.dart';
 
 var jsonResponse,
     _nombre = '',
     _apellido_paterno = '',
     _apellido_materno = '',
-    _edad = '',
+    _fecha = '',
     _calle_numero = '',
     _colonia = '',
     _cp = '',
     _alcaldia_municipio = '',
     _estado = '',
     _email = '',
-    _password = '•••••••••••••',
-    _temp;
+    _password = '',
+    _temp,
+    _usuarioActivo = '',
+    _sesionActivaPrefs = "sesionActiva",
+    _usuarioActivoPrefs = "usuarioActivo",
+    _passwordActivaPrefs = "passwordActiva";
 
-bool _bandera = true;
+int _id_usuario, _id_ciudadano;
 
 class PerfilCiudadano extends StatefulWidget {
   PerfilCiudadano({Key key}) : super(key: key);
@@ -29,8 +34,15 @@ class PerfilCiudadano extends StatefulWidget {
 
 class _PerfilCiudadanoState extends State<PerfilCiudadano> {
   @override
+  void initState() {
+    super.initState();
+    _revisarUsuarioActivo().then((valor) {
+      _recuperarCiudadanos();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (_bandera) _recuperarCiudadanos();
     return Scaffold(
       appBar: AppBar(
         title: Text('Perfil'),
@@ -68,7 +80,7 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
                         Divider(),
                         _elementoCard('Apellido Materno', _apellido_materno),
                         Divider(),
-                        _elementoCard('Edad', _edad),
+                        _elementoCard('Fecha de Nacimiento', _fecha),
                       ],
                     ),
                   ),
@@ -153,29 +165,51 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
             SizedBox(
               height: 20.0,
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Container(),
-                ButtonTheme(
-                  height: 45.0,
-                  child: RaisedButton(
-                    child: Text(
-                      'Actualizar datos',
-                      style: TextStyle(fontSize: 17),
-                    ),
-                    color: Color(0xffd8a500),
-                    textColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.0)),
-                    onPressed: () {
-                      setState(() {
-                        _bandera = true;
-                      });
-                    },
-                  ),
-                )
-              ],
+            ButtonTheme(
+              height: 45.0,
+              minWidth: MediaQuery.of(context).size.width - 40,
+              child: RaisedButton(
+                child: Text(
+                  'Actualizar datos',
+                  style: TextStyle(fontSize: 17),
+                ),
+                color: Color(0xffffd54f),
+                textColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0)),
+                onPressed: () {
+                  setState(() {
+                    _actualizarCiudadano().then((valor) {
+                      if (valor)
+                        _showToast('Perfil actualizado');
+                      else
+                        _showToast('Error al actualizar perfil');
+                    });
+                  });
+                },
+              ),
+            ),
+            SizedBox(
+              height: 15.0,
+            ),
+            ButtonTheme(
+              height: 45.0,
+              minWidth: MediaQuery.of(context).size.width - 40,
+              child: RaisedButton(
+                child: Text(
+                  'Cerrar sesión',
+                  style: TextStyle(fontSize: 17),
+                ),
+                color: Color(0xffd8a500),
+                textColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0)),
+                onPressed: () {
+                  _cerrarSesion().then((valor) {
+                    Navigator.pushNamed(context, 'login');
+                  });
+                },
+              ),
             ),
             SizedBox(
               height: 10.0,
@@ -186,27 +220,63 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
     );
   }
 
-  Future<String> _recuperarCiudadanos() async {
-    log("holis");
-    var url = 'http://192.168.0.26:8080/appCiudadano/ciudadanos';
+  Future<bool> _recuperarCiudadanos() async {
+    log(_usuarioActivo);
+    var url =
+        'http://13.84.215.39:8080/usuarios/nombreUsuario/' + _usuarioActivo;
     var response = await http.get(url);
     if (response.statusCode == 200) {
-      _bandera = false;
       jsonResponse = convert.jsonDecode(response.body);
-      _obtenerEdad(DateTime.parse(jsonResponse[0]['fecha_nacimiento']));
-      _nombre = jsonResponse[0]['nombre'];
-      _apellido_paterno = jsonResponse[0]['apellido_paterno'];
-      _apellido_materno = jsonResponse[0]['apellido_materno'];
-      _calle_numero = jsonResponse[0]['calle_numero'];
-      _colonia = jsonResponse[0]['colonia'];
-      _cp = jsonResponse[0]['cp'];
-      _alcaldia_municipio = jsonResponse[0]['alcaldia_municipio'];
-      _estado = jsonResponse[0]['estado'];
-      _email = jsonResponse[0]['email'];
-      setState(() {});
-      return "Correcto";
+      setState(() {
+        _nombre = jsonResponse['nombre'];
+        _apellido_paterno = jsonResponse['apellido_paterno'];
+        _apellido_materno = jsonResponse['apellido_materno'];
+        _email = jsonResponse['email'];
+        _fecha = jsonResponse['fecha_nacimiento'];
+        _calle_numero = jsonResponse['calle_numero'];
+        _colonia = jsonResponse['colonia'];
+        _cp = jsonResponse['cp'];
+        _alcaldia_municipio = jsonResponse['alcaldia_municipio'];
+        _estado = jsonResponse['estado'];
+        _id_usuario = jsonResponse['idUsuario'];
+        _id_ciudadano = jsonResponse['idCiudadano'];
+      });
+      return true;
     } else {
       log('${response.statusCode}');
+    }
+  }
+
+  Future<bool> _actualizarCiudadano() async {
+    var url = 'http://13.84.215.39:8080/actualizar/uciudadano/' +
+        _id_usuario.toString();
+    var response = await http.put(url,
+        headers: {
+          "Accept": "application/json",
+          "content-type": "application/json"
+        },
+        body: convert.jsonEncode(
+          {
+            "nombre": _nombre,
+            "apellido_paterno": _apellido_paterno,
+            "apellido_materno": _apellido_materno,
+            "email": _email,
+            "nombreUsuario": _email,
+            "password": _password,
+            "fecha_nacimiento": _fecha,
+            "calle_numero": _calle_numero,
+            "colonia": _colonia,
+            "cp": _cp,
+            "alcaldia_municipio": _alcaldia_municipio,
+            "estado": _estado,
+            "id_recomendacion": "1",
+            "idUsuario": _id_usuario.toString()
+          },
+        ));
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -231,7 +301,7 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
               onPressed: () {
                 setState(() {
                   log(_campo);
-                  _mostrarAlertaTips(context, _campo);
+                  _mostrarCuadroModificacion(context, _campo);
                 });
               },
             )),
@@ -241,40 +311,24 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
     );
   }
 
-  void _obtenerEdad(DateTime fechaNacimiento) {
-    DateTime now = new DateTime.now();
-    var years = now.year - fechaNacimiento.year;
-    var months = now.month - fechaNacimiento.month;
-    var days = now.day - fechaNacimiento.day;
-
-    if (months < 0 || (months == 0 && days < 0)) {
-      years--;
-      months += (days < 0 ? 11 : 12);
-    }
-
-    if (days < 0) {
-      final monthAgo =
-          new DateTime(now.year, now.month - 1, fechaNacimiento.day);
-      days = now.difference(monthAgo).inDays + 1;
-    }
-
-    _edad = years.toString();
-  }
-
-  void _mostrarAlertaTips(BuildContext context, String campo) {
-    log(campo);
-    if (campo == "Edad")
+  void _mostrarCuadroModificacion(BuildContext context, String campo) {
+    if (campo == "Fecha de Nacimiento")
       showDatePicker(
               context: context,
               initialDate: DateTime(1980),
               firstDate: DateTime(1910),
               lastDate: DateTime.now())
           .then((fecha) {
-        log(fecha.day.toString() +
-            fecha.month.toString() +
-            fecha.year.toString());
         setState(() {
-          _obtenerEdad(fecha);
+          _fecha = fecha.year.toString();
+          if (fecha.month.toString().length == 1)
+            _fecha = _fecha + "-0" + fecha.month.toString();
+          else
+            _fecha = _fecha + "-" + fecha.month.toString();
+          if (fecha.day.toString().length == 1)
+            _fecha = _fecha + "-0" + fecha.day.toString();
+          else
+            _fecha = _fecha + "-" + fecha.day.toString();
         });
       });
     else {
@@ -290,15 +344,12 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
               content: Container(
                   width: MediaQuery.of(context).size.width,
                   child: TextField(
-                    maxLength: 10,
                     autofocus: true,
-                    textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20.0)),
                       hintText: campo,
                     ),
-                    //labelText: 'holisx2'),
                     onChanged: (valor) {
                       _temp = valor;
                     },
@@ -361,5 +412,26 @@ class _PerfilCiudadanoState extends State<PerfilCiudadano> {
             );
           });
     }
+  }
+
+  Future<void> _cerrarSesion() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString(_sesionActivaPrefs, null);
+    prefs.setString(_usuarioActivoPrefs, null);
+    prefs.setString(_passwordActivaPrefs, null);
+  }
+
+  Future<void> _revisarUsuarioActivo() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    _usuarioActivo = prefs.getString(_usuarioActivoPrefs);
+    _password = prefs.getString(_passwordActivaPrefs);
+    return true;
+  }
+
+  void _showToast(String mensaje) {
+    Fluttertoast.showToast(
+        msg: mensaje,
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM);
   }
 }

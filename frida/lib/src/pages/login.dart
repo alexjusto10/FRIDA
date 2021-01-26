@@ -1,5 +1,11 @@
+import 'dart:developer';
+
+import 'package:FRIDA/models/login_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert' as convert;
 
 class Login extends StatefulWidget {
   @override
@@ -7,90 +13,191 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
-  String _password = '';
+  TextEditingController _controllerUsername, _controllerPassword;
+  bool _check = false;
+  String _password = '', _username = '', _token;
+  final String _recordarUsuarioPrefs = "recordarUsuario",
+      _recordarPasswordPrefs = "recordarPassword",
+      _recordarCheckPrefs = "recordarCheck",
+      _sesionActivaPrefs = "sesionActiva",
+      _usuarioActivoPrefs = "usuarioActivo",
+      _passwordActivaPrefs = "passwordActiva";
+
+  @override
+  void initState() {
+    super.initState();
+    _revisarSesionActiva().then((valor) {
+      if (valor) {
+        Navigator.pushNamed(context, 'home_ciudadano');
+      }
+    });
+    _revisarRecordarLogin().then((valor) {
+      setState(() {
+        _controllerUsername = new TextEditingController(text: _username);
+        _controllerPassword = new TextEditingController(text: _password);
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Center(
-          child: Container(
-            padding: EdgeInsets.all(70.0),
-            child: Column(
-              children: <Widget>[
-                Text(
-                  'Sistema Auxiliar Post-Sísmico',
-                  style: TextStyle(
-                    fontSize: 20.0,
-                  ),
-                ),
-                SizedBox(height: 5.0),
-                Text(
-                  'FRIDA',
-                  style: TextStyle(
-                    fontSize: 35.0,
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.all(60.0),
-                  child: FadeInImage(
-                    image: AssetImage('assets/Logo.png'),
-                    placeholder: AssetImage('assets/original.gif'),
-                    fadeInDuration: Duration(milliseconds: 200),
-                  ),
-                ),
-                _crearEmail(),
-                SizedBox(height: 20.0,), 
-                _crearPassword(),
-                SizedBox(height: 20.0,),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return WillPopScope(
+      onWillPop: _onBackPressed,
+      child: Scaffold(
+        body: SingleChildScrollView(
+          child: Center(
+            child: Container(
+                alignment: Alignment.center,
+                padding: EdgeInsets.all(70.0),
+                child: Column(
                   children: <Widget>[
-                    Expanded(
-                      child:Container(
-                        padding: EdgeInsets.only(right: 3.0),
-                        child:ButtonTheme(
-                          height: 45.0,
-                          child:  RaisedButton(
-                            child: Text(
-                              'Registrarse',
-                              style: TextStyle(
-                                fontSize: 17,
-                                color: Colors.black
-                              ),
-                            ),
-                            color: Color(0xffd8a500),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
-                            onPressed: () {Navigator.pushNamed(context, 'registro');},
-                          )
-                        )
+                    Text(
+                      'Sistema Auxiliar Post-Sísmico',
+                      style: TextStyle(
+                        fontSize: 20.0,
                       ),
                     ),
-                    Expanded(
-                      child:Container(
-                        padding: EdgeInsets.only(left: 3.0),
-                        child:ButtonTheme(
-                          height: 45.0,
-                          child:  RaisedButton(
-                            child: Text(
-                              'Iniciar sesión',
-                              style: TextStyle(
-                                fontSize: 17,
-                                color: Colors.black
-                              ),
-                            ),
-                            color: Color(0xffffd54f),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
-                            onPressed: () {Navigator.pushNamed(context, 'home_ciudadano');},
-                          )
-                        )
+                    SizedBox(height: 5.0),
+                    Text(
+                      'FRIDA',
+                      style: TextStyle(
+                        fontSize: 35.0,
                       ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.all(60.0),
+                      child: FadeInImage(
+                        image: AssetImage('assets/Logo.png'),
+                        placeholder: AssetImage('assets/original.gif'),
+                        fadeInDuration: Duration(milliseconds: 200),
+                      ),
+                    ),
+                    _crearEmail(),
+                    SizedBox(
+                      height: 20.0,
+                    ),
+                    _crearPassword(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Checkbox(
+                          value: _check,
+                          onChanged: (nuevoValor) {
+                            setState(() {
+                              _check = nuevoValor;
+                            });
+                          },
+                        ),
+                        Text('¿Recordar credenciales?'),
+                      ],
+                    ),
+                    SizedBox(
+                      height: 20.0,
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: <Widget>[
+                        Expanded(
+                          child: Container(
+                              padding: EdgeInsets.only(right: 3.0),
+                              child: ButtonTheme(
+                                  height: 45.0,
+                                  child: RaisedButton(
+                                    child: Text(
+                                      'Registrarse',
+                                      style: TextStyle(
+                                          fontSize: 17, color: Colors.black),
+                                    ),
+                                    color: Color(0xffd8a500),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10.0)),
+                                    onPressed: () {
+                                      Navigator.pushNamed(context, 'registro');
+                                    },
+                                  ))),
+                        ),
+                        Expanded(
+                          child: Container(
+                              padding: EdgeInsets.only(left: 3.0),
+                              child: ButtonTheme(
+                                  height: 45.0,
+                                  child: RaisedButton(
+                                    child: Text(
+                                      'Iniciar sesión',
+                                      style: TextStyle(
+                                          fontSize: 17, color: Colors.black),
+                                    ),
+                                    color: Color(0xffffd54f),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10.0)),
+                                    onPressed: () {
+                                      _verificarLogin().then((autenticacion) {
+                                        if (autenticacion != null) {
+                                          if (autenticacion.authorities.first
+                                                  .authority ==
+                                              'ROLE_CIUDADANO') {
+                                            _recordarLogin(_check);
+                                            _token = autenticacion.token;
+                                            _recordarSesionActiva();
+                                            Navigator.pushNamed(
+                                                context, 'home_ciudadano');
+                                          } else {
+                                            showDialog(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (context) {
+                                                  return AlertDialog(
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        10.0)),
+                                                    title: Text('Error'),
+                                                    content: Container(
+                                                      child: Text(
+                                                        'Credenciales incorrectas.',
+                                                        style: TextStyle(
+                                                          fontSize: 17,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.justify,
+                                                      ),
+                                                    ),
+                                                    actions: <Widget>[
+                                                      ButtonTheme(
+                                                          height: 45.0,
+                                                          child: RaisedButton(
+                                                            shape: RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            10.0)),
+                                                            color: Color(
+                                                                0xffffd54f),
+                                                            child:
+                                                                Text('Salir'),
+                                                            onPressed: () =>
+                                                                Navigator.of(
+                                                                        context)
+                                                                    .pop(),
+                                                          )),
+                                                    ],
+                                                  );
+                                                });
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ))),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
-            )
+                )),
           ),
         ),
       ),
@@ -99,36 +206,149 @@ class _LoginState extends State<Login> {
 
   Widget _crearEmail() {
     return TextField(
+      controller: _controllerUsername,
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20.0)
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
         hintText: 'Introduce tu correo electrónico',
         labelText: 'Correo electrónico',
         suffixIcon: Icon(Icons.person),
       ),
+      onChanged: (valor) {
+        setState(() {
+          _username = valor;
+        });
+      },
     );
   }
 
   Widget _crearPassword() {
     return TextField(
+      controller: _controllerPassword,
       obscureText: true,
       decoration: InputDecoration(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20.0)
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20.0)),
         counter: Text('Letras ${_password.length}'),
         hintText: 'Introduce tu contraseña',
         labelText: 'Contraseña',
         helperText: '8 caracteres mínimo',
         suffixIcon: Icon(Icons.lock),
       ),
-      onChanged: (valor){
+      onChanged: (valor) {
         setState(() {
           _password = valor;
         });
       },
     );
+  }
+
+  Future<void> _recordarLogin(bool valor) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (valor) {
+      prefs.setString(_recordarUsuarioPrefs, _username);
+      prefs.setString(_recordarPasswordPrefs, _password);
+    } else {
+      prefs.setString(_recordarUsuarioPrefs, '');
+      prefs.setString(_recordarPasswordPrefs, '');
+    }
+    prefs.setBool(_recordarCheckPrefs, valor);
+  }
+
+  Future<bool> _revisarRecordarLogin() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_recordarUsuarioPrefs) == null)
+      prefs.setString(_recordarUsuarioPrefs, '');
+    _username = prefs.getString(_recordarUsuarioPrefs);
+
+    if (prefs.getString(_recordarPasswordPrefs) == null)
+      prefs.setString(_recordarPasswordPrefs, '');
+    _password = prefs.getString(_recordarPasswordPrefs);
+
+    if (prefs.getBool(_recordarCheckPrefs) == null)
+      prefs.setBool(_recordarCheckPrefs, false);
+    _check = prefs.getBool(_recordarCheckPrefs);
+
+    return true;
+  }
+
+  Future<void> _recordarSesionActiva() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString(_sesionActivaPrefs, _token);
+    prefs.setString(_usuarioActivoPrefs, _username);
+    prefs.setString(_passwordActivaPrefs, _password);
+  }
+
+  Future<bool> _revisarSesionActiva() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_sesionActivaPrefs) == null)
+      return false;
+    else {
+      _token = prefs.getString(_sesionActivaPrefs);
+      return true;
+    }
+  }
+
+  Future<LoginModel> _verificarLogin() async {
+    final String url = "http://13.84.215.39:8080/login";
+    final response = await http.post(url,
+        headers: {
+          "Accept": "application/json",
+          "content-type": "application/json"
+        },
+        body: convert.jsonEncode(
+          {
+            "nombreUsuario": _username,
+            "password": _password,
+          },
+        ));
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final String responseString = response.body;
+      return loginModelFromJson(responseString);
+    } else {
+      return null;
+    }
+  }
+
+  Future<bool> _onBackPressed() {
+    return showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            title: Text('Cerrar la aplicación'),
+            content: Container(
+              child: Text(
+                '¿Desea salir de la aplicación?',
+                style: TextStyle(
+                  fontSize: 17,
+                ),
+                textAlign: TextAlign.justify,
+              ),
+            ),
+            actions: <Widget>[
+              ButtonTheme(
+                height: 45.0,
+                child: RaisedButton(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10.0)),
+                  color: Color(0xffd8a500),
+                  child: Text('Cancelar'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffffd54f),
+                    child: Text('Salir'),
+                    onPressed: () => SystemNavigator.pop(),
+                  )),
+            ],
+          );
+        });
   }
 }

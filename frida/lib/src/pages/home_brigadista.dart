@@ -1,6 +1,13 @@
+import 'package:FRIDA/models/informacion_caso_brigadista_model.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:android_intent/android_intent.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert' as convert;
 
 class HomeBrigadista extends StatefulWidget {
   @override
@@ -8,80 +15,180 @@ class HomeBrigadista extends StatefulWidget {
 }
 
 class _HomeBrigadistaState extends State<HomeBrigadista> {
+  String _sesionActivaPrefs = "sesionActiva",
+      _usuarioActivoPrefs = "usuarioActivo",
+      _usuarioActivo;
+  bool _cargando = true, _casoAsignado = false;
+  InformacionCasoBrigadistaModel _informacion;
+  CameraPosition _initialPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _revisarSesionActiva().then((valor) {
+      if (valor) {
+        _recuperarCaso().then((informacion) {
+          setState(() {
+            if (informacion) {
+              _casoAsignado = true;
+              _initialPosition = CameraPosition(
+                  target: LatLng(double.parse(_informacion.lat),
+                      double.parse(_informacion.lng)),
+                  zoom: 15.0);
+            } else {
+              _casoAsignado = false;
+            }
+            _cargando = false;
+          });
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Caso asignado',
-          style: TextStyle(
-            fontSize: 25.0,
-          ),
-        ),
-        actions: <Widget>[
-          IconButton(
-            icon: Icon(Icons.add_location),
-            onPressed: () {
-              Navigator.pushNamed(context, 'centro_acopio_brigadista');
-            },
-          )
-        ],
-        leading: Container(),
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: 30.0, vertical: 10.0),
-        children: <Widget>[
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.0),
-            child: Text('Información del inmueble',
-                style: TextStyle(
-                  fontSize: 17.0,
-                  fontWeight: FontWeight.bold,
+    return WillPopScope(
+        onWillPop: _onBackPressed,
+        child: Scaffold(
+            appBar: AppBar(
+              leading: Container(),
+              actions: <Widget>[
+                IconButton(
+                  icon: Icon(Icons.add_location),
+                  onPressed: () {
+                    Navigator.pushNamed(context, 'centro_acopio_brigadista');
+                  },
                 ),
-                textAlign: TextAlign.left),
-          ),
-          _cardTipo1(),
-          SizedBox(
-            height: 5.0,
-          ),
-          _mapas(),
-          SizedBox(
-            height: 20.0,
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.0),
-            child: Text('Fotos del inmueble',
-                style: TextStyle(
-                  fontSize: 17.0,
-                  fontWeight: FontWeight.bold,
+                IconButton(
+                  icon: Icon(Icons.power_settings_new),
+                  onPressed: () {
+                    _dialogCerrarSesion();
+                  },
                 ),
-                textAlign: TextAlign.left),
+              ],
+            ),
+            body: _cargando == true
+                ? _cargarDatos()
+                : _mostrarInformacionCaso()));
+  }
+
+  Widget _mostrarInformacionCaso() {
+    return _casoAsignado == true ? _informacionCaso() : _sinIformacionCaso();
+  }
+
+  Widget _sinIformacionCaso() {
+    return Center(
+      child: Container(
+        alignment: Alignment.bottomLeft,
+        padding: EdgeInsets.symmetric(horizontal: 30.0),
+        height: 140,
+        child: Card(
+          elevation: 5.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
           ),
-          _cardContainer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Container(),
-              ButtonTheme(
-                height: 45.0,
-                child: RaisedButton(
-                  child: Text(
-                    'Confirmar evaluación',
-                    style: TextStyle(fontSize: 17),
-                  ),
-                  color: Color(0xffd8a500),
-                  textColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0)),
-                  onPressed: _actualizarMapa,
+              ListTile(
+                leading: Icon(
+                  Icons.error,
+                  color: Colors.grey,
+                  size: 50.0,
                 ),
-              )
+                title: Text(
+                  'Sin caso asignado',
+                  style: TextStyle(fontSize: 30.0),
+                ),
+                subtitle: Text(
+                  'No se tiene ningún caso asignado.',
+                  style: TextStyle(fontSize: 19.0),
+                ),
+              ),
             ],
           ),
-          SizedBox(
-            height: 10.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _informacionCaso() {
+    return ListView(
+      padding: EdgeInsets.symmetric(horizontal: 30.0, vertical: 10.0),
+      children: <Widget>[
+        _cardTipo1(),
+        SizedBox(
+          height: 5.0,
+        ),
+        _mapas(),
+        SizedBox(
+          height: 20.0,
+        ),
+        Card(
+          elevation: 5.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
           ),
-        ],
+          child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.0),
+              child: Column(
+                children: [
+                  Text('Fotos del inmueble',
+                      style: TextStyle(
+                        fontSize: 17.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.left),
+                  _cardTipo2(),
+                ],
+              )),
+        ),
+        SizedBox(
+          height: 30.0,
+        ),
+        ButtonTheme(
+          height: 45.0,
+          child: RaisedButton(
+            elevation: 5.0,
+            child: Text(
+              'Confirmar evaluación',
+              style: TextStyle(fontSize: 17),
+            ),
+            color: Color(0xffffd54f),
+            textColor: Colors.black,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            onPressed: _dialogConfirmarEvaluacion,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _cargarDatos() {
+    return Center(
+      child: Container(
+        alignment: Alignment.bottomLeft,
+        padding: EdgeInsets.symmetric(horizontal: 30.0),
+        height: 140,
+        child: Card(
+          elevation: 0.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              ListTile(
+                leading: CircularProgressIndicator(),
+                title: Text(
+                  'Cargando datos...',
+                  style: TextStyle(fontSize: 25.0),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -97,18 +204,22 @@ class _HomeBrigadistaState extends State<HomeBrigadista> {
         child: Column(
           children: <Widget>[
             ListTile(
-              leading: Icon(
-                Icons.error,
-                color: Colors.red,
-                size: 40.0,
-              ),
+              leading: _simboloPrioridad(),
               title: Text(
-                'Daño de prioridad alta.',
-                style: TextStyle(fontSize: 20.0),
+                'Daño de prioridad ' + _definirPrioridad(),
+                style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                'Eje Central Lázaro Cárdenas S/N, Tlatelolco, Cuauhtémoc, 06900 Ciudad de México, CDMX',
-                style: TextStyle(fontSize: 15.0),
+                _informacion.calleNumero.toString() +
+                    ', ' +
+                    _informacion.colonia.toString() +
+                    ', ' +
+                    _informacion.alcaldiaMunicipio.toString() +
+                    ', ' +
+                    _informacion.cp.toString() +
+                    ', ' +
+                    _informacion.estado.toString(),
+                style: TextStyle(fontSize: 18.0),
               ),
             ),
           ],
@@ -117,49 +228,118 @@ class _HomeBrigadistaState extends State<HomeBrigadista> {
     );
   }
 
-  Widget _cardTipo2(String url) {
+  String _definirPrioridad() {
+    if (_informacion.prioridad == 1) {
+      return "alta";
+    } else if (_informacion.prioridad == 2) {
+      return "media";
+    } else {
+      return "baja";
+    }
+  }
+
+  Icon _simboloPrioridad() {
+    if (_informacion.prioridad == 1) {
+      return Icon(
+        Icons.error,
+        color: Colors.red,
+        size: 40.0,
+      );
+    } else if (_informacion.prioridad == 2) {
+      return Icon(
+        Icons.error,
+        color: Colors.amber[900],
+        size: 40.0,
+      );
+    } else {
+      return Icon(
+        Icons.error,
+        color: Colors.amber,
+        size: 40.0,
+      );
+    }
+  }
+
+  Widget _cardTipo2() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
-      alignment: Alignment.topCenter,
-      child: Container(
-          width: MediaQuery.of(context).size.width,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10.0)),
-          child: Card(
-              elevation: 5.0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10.0)),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10.0),
-                child: FadeInImage(
-                  image: NetworkImage(url),
-                  placeholder: AssetImage('assets/original.gif'),
-                  fadeInDuration: Duration(milliseconds: 200),
-                  fit: BoxFit.fitWidth,
-                ),
-              ))),
-    );
+        height: 300,
+        padding: EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+        alignment: Alignment.topCenter,
+        child: Container(
+            width: MediaQuery.of(context).size.width,
+            decoration:
+                BoxDecoration(borderRadius: BorderRadius.circular(10.0)),
+            child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _informacion.imagenes.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 10.0, vertical: 10.0),
+                      child: Container(
+                          width: 200.0,
+                          child: FlatButton(
+                              padding: EdgeInsets.all(0.0),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 5.0, vertical: 5.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                  child: Image.memory(convert.base64Decode(
+                                      _informacion.imagenes[index].bytes)),
+                                ),
+                              ),
+                              onPressed: () {
+                                showDialog(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) {
+                                      return AlertDialog(
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10.0)),
+                                        title: Text('Imagen del inmueble'),
+                                        content: Container(
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8.0),
+                                            child: Image.memory(convert
+                                                .base64Decode(_informacion
+                                                    .imagenes[index].bytes)),
+                                          ),
+                                        ),
+                                        actions: <Widget>[
+                                          ButtonTheme(
+                                              height: 45.0,
+                                              child: RaisedButton(
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10.0)),
+                                                color: Color(0xffffd54f),
+                                                child: Text('Salir'),
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(),
+                                              )),
+                                        ],
+                                      );
+                                    });
+                              })));
+                })));
   }
 
-  Widget _cardContainer() {
-    return Column(
-      children: <Widget>[
-        _cardTipo2(
-            'https://www.animalpolitico.com/wp-content/uploads/2014/04/Danos_Colonia_Doctores-2.jpg'),
-        _cardTipo2(
-            'https://www.unionedomex.mx/sites/default/files/styles/galeria/public/field/image/grietasedomex.jpg'),
-        _cardTipo2(
-            'https://www.greentv.com.mx/wp-content/uploads/2017/09/CAP-QUE-2017-09-22_23-2.jpg')
-      ],
-    );
-  }
-
-  CameraPosition _initialPosition =
-      CameraPosition(target: LatLng(19.4516892, -99.1375919), zoom: 15.0);
-  GoogleMapController _controller;
   final Set<Marker> _markers = Set();
-
   void _onMapCreated(GoogleMapController controller) {
-    _controller = controller;
+    double lat = double.parse(_informacion.lat),
+        lng = double.parse(_informacion.lng);
+    setState(() {
+      _markers.add(
+        Marker(
+          markerId: MarkerId('Caso encontrado'),
+          position: LatLng(lat, lng),
+        ),
+      );
+    });
   }
 
   Widget _mapas() {
@@ -185,9 +365,14 @@ class _HomeBrigadistaState extends State<HomeBrigadista> {
                 child: Stack(
                   children: <Widget>[
                     GoogleMap(
+                      scrollGesturesEnabled: true,
+                      zoomGesturesEnabled: true,
                       onMapCreated: _onMapCreated,
                       initialCameraPosition: _initialPosition,
                       markers: _markers,
+                      gestureRecognizers: Set()
+                        ..add(Factory<PanGestureRecognizer>(
+                            () => PanGestureRecognizer())),
                     ),
                   ],
                 )),
@@ -198,14 +383,196 @@ class _HomeBrigadistaState extends State<HomeBrigadista> {
     );
   }
 
-  void _actualizarMapa() {
-    setState(() {
-      _markers.add(
-        Marker(
-          markerId: MarkerId('Tlatelolco'),
-          position: LatLng(19.4516892, -99.1375919),
-        ),
-      );
-    });
+  void _dialogConfirmarEvaluacion() {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            title: Text('Caso evaluado'),
+            content: Container(
+              child: Text(
+                '¿Desea cerrar este caso y marcarlo como evaluado?',
+                style: TextStyle(
+                  fontSize: 17,
+                ),
+                textAlign: TextAlign.justify,
+              ),
+            ),
+            actions: <Widget>[
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffd8a500),
+                    child: Text('Cancelar'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  )),
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffffd54f),
+                    child: Text('Confirmar'),
+                    onPressed: () {
+                      setState(() {
+                        _casoAsignado = false;
+                        Navigator.of(context).pop();
+                        _casoEvaluado().then((value) {
+                          if (value)
+                            _showToast('Caso evaluado con éxito');
+                          else
+                            _showToast('Error al confirmar la evaluación');
+                        });
+                      });
+                    },
+                  )),
+            ],
+          );
+        });
+  }
+
+  Future<bool> _casoEvaluado() async {
+    var url = 'http://13.84.215.39:8080/confirmar/caso/' + _usuarioActivo;
+    var response = await http.put(
+      url,
+      headers: {
+        "Accept": "application/json",
+        "content-type": "application/json"
+      },
+    );
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  void _showToast(String mensaje) {
+    Fluttertoast.showToast(
+        msg: mensaje,
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM);
+  }
+
+  void _dialogCerrarSesion() {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            title: Text('Cerrar sesión'),
+            content: Container(
+              child: Text(
+                '¿Desea cerrar sesión?',
+                style: TextStyle(
+                  fontSize: 17,
+                ),
+                textAlign: TextAlign.justify,
+              ),
+            ),
+            actions: <Widget>[
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffd8a500),
+                    child: Text('Cancelar'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  )),
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffffd54f),
+                    child: Text('Cerrar sesión'),
+                    onPressed: () {
+                      _cerrarSesion().then((valor) {
+                        Navigator.pushNamed(context, 'login_brigadista');
+                      });
+                    },
+                  )),
+            ],
+          );
+        });
+  }
+
+  Future<bool> _cerrarSesion() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString(_sesionActivaPrefs, null);
+    return true;
+  }
+
+  Future<bool> _revisarSesionActiva() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    _usuarioActivo = prefs.getString(_usuarioActivoPrefs);
+    return true;
+  }
+
+  Future<bool> _recuperarCaso() async {
+    var url =
+        'http://13.84.215.39:8080/listar/casoXNombreUsuario/' + _usuarioActivo;
+    var response = await http.get(url);
+    if (response.statusCode == 200) {
+      if (convert.jsonDecode(response.body)['idCaso'] != null) {
+        _informacion = informacionCasoBrigadistaModelFromJson(response.body);
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+
+  Future<bool> _onBackPressed() {
+    return showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.0)),
+            title: Text('Cerrar la aplicación'),
+            content: Container(
+              child: Text(
+                '¿Desea salir de la aplicación?',
+                style: TextStyle(
+                  fontSize: 17,
+                ),
+                textAlign: TextAlign.justify,
+              ),
+            ),
+            actions: <Widget>[
+              ButtonTheme(
+                height: 45.0,
+                child: RaisedButton(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10.0)),
+                  color: Color(0xffd8a500),
+                  child: Text('Cancelar'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+              ButtonTheme(
+                  height: 45.0,
+                  child: RaisedButton(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    color: Color(0xffffd54f),
+                    child: Text('Salir'),
+                    onPressed: () => SystemNavigator.pop(),
+                  )),
+            ],
+          );
+        });
   }
 }
